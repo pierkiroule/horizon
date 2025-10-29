@@ -26,21 +26,6 @@ export default function PlayerExplorer() {
     if (engineRef.current) engineRef.current.setMasterGain(masterGain);
   }, [masterGain]);
 
-  const { camera } = useThree();
-  useFrame(() => {
-    if (!engineRef.current || !scene) return;
-    const forward = new THREE.Vector3();
-    camera.getWorldDirection(forward);
-    
-    // Calculer le mix normal
-    engineRef.current.updateMix(forward, scene, { beamWidthDeg, normalize, masterGain });
-    
-    // Si une source est touchée, augmenter temporairement son gain (boost)
-    if (hitSourceId && engineRef.current.isPlaying) {
-      engineRef.current.boostSource(hitSourceId, 2.0, 1.0);
-    }
-  });
-
   async function onPlay() {
     if (!scene) {
       alert('Aucune scène disponible. Créez d\'abord une scène dans l\'éditeur Admin.');
@@ -101,6 +86,16 @@ export default function PlayerExplorer() {
         <GlobalControls />
         {useSensors && <DeviceOrientationControls makeDefault />}
         
+        {/* Composant interne qui gère la mise à jour audio (doit être dans le Canvas) */}
+        <PlayerSceneController
+          scene={scene}
+          engineRef={engineRef}
+          hitSourceId={hitSourceId}
+          beamWidthDeg={beamWidthDeg}
+          normalize={normalize}
+          masterGain={masterGain}
+        />
+        
         {/* Rayon laser visible (utilise le gyroscope via DeviceOrientationControls) */}
         {useSensors && <LaserRay length={5} color="#ff0000" visible={true} />}
         
@@ -118,6 +113,44 @@ export default function PlayerExplorer() {
       </CanvasLayout>
     </div>
   );
+}
+
+/**
+ * Composant interne qui doit être rendu à l'intérieur du Canvas
+ * pour pouvoir utiliser useThree() et useFrame()
+ */
+function PlayerSceneController({
+  scene,
+  engineRef,
+  hitSourceId,
+  beamWidthDeg,
+  normalize,
+  masterGain,
+}: {
+  scene?: Scene3D;
+  engineRef: React.MutableRefObject<AudioEngine | undefined>;
+  hitSourceId: string | null;
+  beamWidthDeg: number;
+  normalize: boolean;
+  masterGain: number;
+}) {
+  const { camera } = useThree();
+  
+  useFrame(() => {
+    if (!engineRef.current || !scene) return;
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    
+    // Calculer le mix normal
+    engineRef.current.updateMix(forward, scene, { beamWidthDeg, normalize, masterGain });
+    
+    // Si une source est touchée, augmenter temporairement son gain (boost)
+    if (hitSourceId && engineRef.current.isPlaying) {
+      engineRef.current.boostSource(hitSourceId, 2.0, 1.0);
+    }
+  });
+  
+  return null; // Ce composant ne rend rien visuellement
 }
 
 function TopBar({
