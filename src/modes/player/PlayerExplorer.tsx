@@ -33,11 +33,23 @@ export default function PlayerExplorer() {
       alert('Aucune scène disponible. Créez d\'abord une scène dans l\'éditeur Admin.');
       return;
     }
-    if (!engineRef.current) engineRef.current = new AudioEngine();
+    // L'AudioContext devrait déjà être créé et activé par enableSensors
+    if (!engineRef.current) {
+      // Si ce n'est pas le cas, créer l'AudioContext ici (interaction utilisateur)
+      engineRef.current = new AudioEngine();
+      try {
+        const ctx = await engineRef.current.ensureContext();
+        await ctx.resume();
+      } catch (e) {
+        alert('Audio bloqué par le navigateur — cliquez d\'abord sur Activer capteurs/son.');
+        console.error(e);
+        return;
+      }
+    }
     try {
       await engineRef.current.start(scene);
     } catch (e) {
-      alert('Audio bloqué par le navigateur — cliquez d\'abord sur Activer capteurs/son.');
+      alert('Impossible de démarrer la lecture audio: ' + String(e));
       console.error(e);
     }
   }
@@ -58,9 +70,18 @@ export default function PlayerExplorer() {
       if (dme && typeof dme.requestPermission === 'function') {
         try { await dme.requestPermission(); } catch {}
       }
+      
+      // Créer et activer l'AudioContext immédiatement via l'interaction utilisateur
+      // Cela débloque l'audio pour les navigateurs qui requièrent une interaction
+      if (!engineRef.current) engineRef.current = new AudioEngine();
+      try {
+        const ctx = await engineRef.current.ensureContext();
+        await ctx.resume(); // Forcer la reprise pour débloquer l'audio
+      } catch (e) {
+        console.warn('Problème lors de l\'activation de l\'audio:', e);
+      }
+      
       setUseSensors(true);
-      // Resume audio context if created
-      try { await engineRef.current?.ensureContext().then((ctx) => ctx.resume()); } catch {}
     } catch (e) {
       alert('Impossible d\'activer les capteurs: ' + String(e));
     }
@@ -86,7 +107,13 @@ export default function PlayerExplorer() {
       />
       <CanvasLayout>
         <GlobalControls />
-        {useSensors && <DeviceOrientationControls makeDefault />}
+        {useSensors && (
+          <>
+            {/* Positionner la caméra au centre de la sphère pour le player */}
+            <CameraCenterPosition />
+            <DeviceOrientationControls makeDefault />
+          </>
+        )}
         
         {/* Composant interne qui gère la mise à jour audio (doit être dans le Canvas) */}
         <PlayerSceneController
@@ -115,6 +142,25 @@ export default function PlayerExplorer() {
       </CanvasLayout>
     </div>
   );
+}
+
+/**
+ * Composant qui positionne la caméra au centre de la sphère (0,0,0)
+ * Le player est toujours au centre et le laser part de ce point
+ * Utilise useFrame pour maintenir la position au centre même si DeviceOrientationControls essaie de la modifier
+ */
+function CameraCenterPosition() {
+  const { camera } = useThree();
+  
+  useFrame(() => {
+    // Maintenir la caméra au centre de la sphère (player position)
+    // DeviceOrientationControls gère la rotation, mais la position reste au centre
+    if (camera.position.x !== 0 || camera.position.y !== 0 || camera.position.z !== 0) {
+      camera.position.set(0, 0, 0);
+    }
+  });
+  
+  return null;
 }
 
 /**
@@ -177,7 +223,7 @@ function TopBar({
       </Link>
       <span className="panel">Scène: {sceneName}</span>
       <button className="button" onClick={onEnableSensors}>
-        {sensorsEnabled ? 'Gyroscope actif' : 'Activer gyroscope'}
+        {sensorsEnabled ? 'Capteurs/Son actifs' : 'Activer capteurs/son'}
       </button>
       {!isPlaying ? (
         <button className="button" onClick={onPlay}>Lecture</button>
