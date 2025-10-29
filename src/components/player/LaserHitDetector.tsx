@@ -59,7 +59,7 @@ export function LaserHitDetector({
         lastHitIdRef.current = hitId;
         
         // Déclencher le son si l'audio engine est fourni
-        if (audioEngine &&audioEngine.isPlaying) {
+        if (audioEngine && audioEngine.isPlaying) {
           // Augmenter temporairement le gain de cette source
           onHit?.(closestSource);
         }

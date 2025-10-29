@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { DeviceOrientationControls, Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -14,7 +14,6 @@ import { LaserHitDetector } from '../../components/player/LaserHitDetector';
 export default function PlayerExplorer() {
   // Utiliser la scène du store au lieu de charger depuis un fichier
   const scene = useAppStore((s) => s.scene);
-  const [loading, setLoading] = useState(false);
   const engineRef = useRef<AudioEngine>();
   const [useSensors, setUseSensors] = useState(false);
   const [hitSourceId, setHitSourceId] = useState<string | null>(null);
@@ -121,7 +120,7 @@ export default function PlayerExplorer() {
           />
         )}
         
-        <SceneContent scene={scene} loading={loading} />
+        <SceneContent scene={scene} />
       </CanvasLayout>
     </div>
   );
@@ -157,10 +156,7 @@ function TopBar({
   );
 }
 
-function SceneContent({ scene, loading }: { scene?: Scene3D; loading: boolean }) {
-  if (loading) return (
-    <Html center><div className="panel">Chargement de la scène…</div></Html>
-  );
+function SceneContent({ scene }: { scene?: Scene3D }) {
   if (!scene) return (
     <Html center>
       <div className="panel" style={{ textAlign: 'center', padding: '20px' }}>
