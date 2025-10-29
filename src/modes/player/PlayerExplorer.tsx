@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useFrame, useThree } from '@react-three/fiber';
 import { DeviceOrientationControls, Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -10,6 +11,7 @@ import { AudioEngine } from '../../audio/AudioEngine';
 import { useAppStore } from '../../state/useAppStore';
 import { LaserRay } from '../../components/player/LaserRay';
 import { LaserHitDetector } from '../../components/player/LaserHitDetector';
+import { ROUTES } from '../../config/routes';
 
 export default function PlayerExplorer() {
   // Utiliser la scène du store au lieu de charger depuis un fichier
@@ -169,7 +171,10 @@ function TopBar({
   sensorsEnabled: boolean;
 }) {
   return (
-    <div style={{ position: 'fixed', top: 10, right: 10, zIndex: 1001, display: 'flex', gap: 8, alignItems: 'center' }}>
+    <div style={{ position: 'fixed', top: 10, left: 10, right: 10, zIndex: 1001, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <Link to={ROUTES.ADMIN} className="button" style={{ textDecoration: 'none', display: 'inline-block' }}>
+        ← Admin
+      </Link>
       <span className="panel">Scène: {sceneName}</span>
       <button className="button" onClick={onEnableSensors}>
         {sensorsEnabled ? 'Gyroscope actif' : 'Activer gyroscope'}

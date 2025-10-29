@@ -1,10 +1,12 @@
 import { useMemo, useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import * as THREE from 'three';
 import type { AudioSource, Scene3D } from '../../lib/types';
 import { useAppStore } from '../../state/useAppStore';
 import { View3D } from '../../components/editor/View3D';
 import { View2D } from '../../components/editor/View2D';
 import { SceneContent } from '../../components/editor/SceneContent';
+import { ROUTES } from '../../config/routes';
 
 type ViewLayout = 'single' | 'grid';
 
@@ -138,6 +140,9 @@ export default function AdminComposer() {
           backdropFilter: 'blur(10px)',
         }}
       >
+        <Link to={ROUTES.PLAYER} className="button" style={{ textDecoration: 'none', display: 'inline-block' }}>
+          → Joueur
+        </Link>
         <input
           className="panel"
           style={{ width: 200 }}
