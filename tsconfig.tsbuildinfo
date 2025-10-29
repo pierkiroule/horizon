@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/audio/AudioEngine.ts","./src/components/CanvasLayout.tsx","./src/components/GlobalControls.tsx","./src/lib/loaders.ts","./src/lib/orientation.ts","./src/lib/types.ts","./src/modes/admin/AdminComposer.tsx","./src/modes/player/PlayerExplorer.tsx","./src/state/useAppStore.ts"],"version":"5.9.3"}

@@ -1,0 +1,15 @@
+{
+  "id": "demo",
+  "name": "Démo - L’Horizon Musical",
+  "global": { "beamWidthDeg": 60, "normalize": true },
+  "sources": [
+    { "id": "s1", "name": "A", "url": "https://cdn.pixabay.com/download/audio/2022/03/01/audio_400fae9dcc.mp3?filename=relaxing-piano-ambient-112199.mp3", "azimuthDeg": -180, "elevationDeg": 0, "gain": 1 },
+    { "id": "s2", "name": "B", "url": "https://cdn.pixabay.com/download/audio/2022/03/01/audio_400fae9dcc.mp3?filename=relaxing-piano-ambient-112199.mp3", "azimuthDeg": -135, "elevationDeg": 0, "gain": 1 },
+    { "id": "s3", "name": "C", "url": "https://cdn.pixabay.com/download/audio/2022/03/01/audio_400fae9dcc.mp3?filename=relaxing-piano-ambient-112199.mp3", "azimuthDeg": -90, "elevationDeg": 0, "gain": 1 },
+    { "id": "s4", "name": "D", "url": "https://cdn.pixabay.com/download/audio/2022/03/01/audio_400fae9dcc.mp3?filename=relaxing-piano-ambient-112199.mp3", "azimuthDeg": -45, "elevationDeg": 0, "gain": 1 },
+    { "id": "s5", "name": "E", "url": "https://cdn.pixabay.com/download/audio/2022/03/01/audio_400fae9dcc.mp3?filename=relaxing-piano-ambient-112199.mp3", "azimuthDeg": 0, "elevationDeg": 0, "gain": 1 },
+    { "id": "s6", "name": "F", "url": "https://cdn.pixabay.com/download/audio/2022/03/01/audio_400fae9dcc.mp3?filename=relaxing-piano-ambient-112199.mp3", "azimuthDeg": 45, "elevationDeg": 0, "gain": 1 },
+    { "id": "s7", "name": "G", "url": "https://cdn.pixabay.com/download/audio/2022/03/01/audio_400fae9dcc.mp3?filename=relaxing-piano-ambient-112199.mp3", "azimuthDeg": 90, "elevationDeg": 0, "gain": 1 },
+    { "id": "s8", "name": "H", "url": "https://cdn.pixabay.com/download/audio/2022/03/01/audio_400fae9dcc.mp3?filename=relaxing-piano-ambient-112199.mp3", "azimuthDeg": 135, "elevationDeg": 0, "gain": 1 }
+  ]
+}
