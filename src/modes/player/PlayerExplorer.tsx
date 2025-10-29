@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useFrame, useThree } from '@react-three/fiber';
 import { DeviceOrientationControls, Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -10,6 +11,7 @@ import { AudioEngine } from '../../audio/AudioEngine';
 import { useAppStore } from '../../state/useAppStore';
 import { LaserRay } from '../../components/player/LaserRay';
 import { LaserHitDetector } from '../../components/player/LaserHitDetector';
+import { ROUTES } from '../../config/routes';
 
 export default function PlayerExplorer() {
   // Utiliser la scène du store au lieu de charger depuis un fichier
@@ -25,21 +27,6 @@ export default function PlayerExplorer() {
   useEffect(() => {
     if (engineRef.current) engineRef.current.setMasterGain(masterGain);
   }, [masterGain]);
-
-  const { camera } = useThree();
-  useFrame(() => {
-    if (!engineRef.current || !scene) return;
-    const forward = new THREE.Vector3();
-    camera.getWorldDirection(forward);
-    
-    // Calculer le mix normal
-    engineRef.current.updateMix(forward, scene, { beamWidthDeg, normalize, masterGain });
-    
-    // Si une source est touchée, augmenter temporairement son gain (boost)
-    if (hitSourceId && engineRef.current.isPlaying) {
-      engineRef.current.boostSource(hitSourceId, 2.0, 1.0);
-    }
-  });
 
   async function onPlay() {
     if (!scene) {
@@ -101,6 +88,16 @@ export default function PlayerExplorer() {
         <GlobalControls />
         {useSensors && <DeviceOrientationControls makeDefault />}
         
+        {/* Composant interne qui gère la mise à jour audio (doit être dans le Canvas) */}
+        <PlayerSceneController
+          scene={scene}
+          engineRef={engineRef}
+          hitSourceId={hitSourceId}
+          beamWidthDeg={beamWidthDeg}
+          normalize={normalize}
+          masterGain={masterGain}
+        />
+        
         {/* Rayon laser visible (utilise le gyroscope via DeviceOrientationControls) */}
         {useSensors && <LaserRay length={5} color="#ff0000" visible={true} />}
         
@@ -120,6 +117,44 @@ export default function PlayerExplorer() {
   );
 }
 
+/**
+ * Composant interne qui doit être rendu à l'intérieur du Canvas
+ * pour pouvoir utiliser useThree() et useFrame()
+ */
+function PlayerSceneController({
+  scene,
+  engineRef,
+  hitSourceId,
+  beamWidthDeg,
+  normalize,
+  masterGain,
+}: {
+  scene?: Scene3D;
+  engineRef: React.MutableRefObject<AudioEngine | undefined>;
+  hitSourceId: string | null;
+  beamWidthDeg: number;
+  normalize: boolean;
+  masterGain: number;
+}) {
+  const { camera } = useThree();
+  
+  useFrame(() => {
+    if (!engineRef.current || !scene) return;
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    
+    // Calculer le mix normal
+    engineRef.current.updateMix(forward, scene, { beamWidthDeg, normalize, masterGain });
+    
+    // Si une source est touchée, augmenter temporairement son gain (boost)
+    if (hitSourceId && engineRef.current.isPlaying) {
+      engineRef.current.boostSource(hitSourceId, 2.0, 1.0);
+    }
+  });
+  
+  return null; // Ce composant ne rend rien visuellement
+}
+
 function TopBar({
   sceneName,
   onPlay,
@@ -136,7 +171,10 @@ function TopBar({
   sensorsEnabled: boolean;
 }) {
   return (
-    <div style={{ position: 'fixed', top: 10, right: 10, zIndex: 1001, display: 'flex', gap: 8, alignItems: 'center' }}>
+    <div style={{ position: 'fixed', top: 10, left: 10, right: 10, zIndex: 1001, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <Link to={ROUTES.ADMIN} className="button" style={{ textDecoration: 'none', display: 'inline-block' }}>
+        ← Admin
+      </Link>
       <span className="panel">Scène: {sceneName}</span>
       <button className="button" onClick={onEnableSensors}>
         {sensorsEnabled ? 'Gyroscope actif' : 'Activer gyroscope'}
