@@ -11,22 +11,21 @@ import { useAppStore } from '../../state/useAppStore';
 import { LaserRay } from '../../components/player/LaserRay';
 import { LaserHitDetector } from '../../components/player/LaserHitDetector';
 
-export default function PlayerExplorer() {
-  // Utiliser la scène du store au lieu de charger depuis un fichier
-  const scene = useAppStore((s) => s.scene);
-  const engineRef = useRef<AudioEngine>();
-  const [useSensors, setUseSensors] = useState(false);
-  const [hitSourceId, setHitSourceId] = useState<string | null>(null);
-
+// Composant qui doit être rendu à l'intérieur du Canvas pour utiliser useThree()
+function AudioMixController({
+  scene,
+  engineRef,
+  hitSourceId,
+}: {
+  scene: Scene3D | null;
+  engineRef: React.MutableRefObject<AudioEngine | undefined>;
+  hitSourceId: string | null;
+}) {
+  const { camera } = useThree();
   const masterGain = useAppStore((s) => s.masterGain);
   const beamWidthDeg = useAppStore((s) => s.beamWidthDeg);
   const normalize = useAppStore((s) => s.normalize);
 
-  useEffect(() => {
-    if (engineRef.current) engineRef.current.setMasterGain(masterGain);
-  }, [masterGain]);
-
-  const { camera } = useThree();
   useFrame(() => {
     if (!engineRef.current || !scene) return;
     const forward = new THREE.Vector3();
@@ -46,6 +45,22 @@ export default function PlayerExplorer() {
       engineRef.current.updateMix(forward, scene, { beamWidthDeg, normalize, masterGain });
     }
   });
+
+  return null; // Ce composant ne rend rien, il gère juste la logique
+}
+
+export default function PlayerExplorer() {
+  // Utiliser la scène du store au lieu de charger depuis un fichier
+  const scene = useAppStore((s) => s.scene);
+  const engineRef = useRef<AudioEngine>();
+  const [useSensors, setUseSensors] = useState(false);
+  const [hitSourceId, setHitSourceId] = useState<string | null>(null);
+
+  const masterGain = useAppStore((s) => s.masterGain);
+
+  useEffect(() => {
+    if (engineRef.current) engineRef.current.setMasterGain(masterGain);
+  }, [masterGain]);
 
   async function onPlay() {
     if (!scene) {
@@ -106,6 +121,13 @@ export default function PlayerExplorer() {
       <CanvasLayout>
         <GlobalControls />
         {useSensors && <DeviceOrientationControls makeDefault />}
+        
+        {/* Contrôleur de mix audio qui utilise useThree() */}
+        <AudioMixController
+          scene={scene}
+          engineRef={engineRef}
+          hitSourceId={hitSourceId}
+        />
         
         {/* Rayon laser visible (utilise le gyroscope via DeviceOrientationControls) */}
         {useSensors && <LaserRay length={5} color="#ff0000" visible={true} />}
