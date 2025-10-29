@@ -33,12 +33,12 @@ export function useLaserRay(length: number = 10): LaserRayState {
     // Origine du rayon (position de la caméra, au centre de la scène)
     const origin = new THREE.Vector3(0, 0, 0);
     
-    // Point final du rayon
-    const endpoint = origin.clone().add(forward.multiplyScalar(length));
+    // Point final du rayon (cloner le vecteur forward pour éviter la mutation)
+    const endpoint = origin.clone().add(forward.clone().multiplyScalar(length));
 
     setRayState({
       origin,
-      direction: forward,
+      direction: forward.clone(),
       length,
       endpoint,
     });
