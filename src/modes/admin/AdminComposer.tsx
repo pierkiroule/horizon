@@ -13,7 +13,6 @@ export default function AdminComposer() {
   const savedScene = useAppStore((s) => s.scene);
   
   const defaultAudioUrl = 'https://cdn.pixabay.com/download/audio/2022/03/01/audio_400fae9dcc.mp3?filename=relaxing-piano-ambient-112199.mp3';
-  const [audioUrl, setAudioUrl] = useState<string>(savedScene?.sources?.[0]?.url ?? defaultAudioUrl);
   const [name, setName] = useState<string>(savedScene?.name ?? 'Démo');
   const [sources, setSources] = useState<AudioSource[]>(savedScene?.sources && savedScene.sources.length > 0 ? savedScene.sources : [...Array(8)].map((_, i) => ({
     id: `s${i + 1}`,
@@ -34,14 +33,16 @@ export default function AdminComposer() {
       id: savedScene?.id ?? `scene-${Date.now()}`,
       name,
       global: { beamWidthDeg: 60, normalize: true },
-      sources: sources.map((s) => ({ ...s, url: audioUrl })),
+      sources: sources, // Utiliser directement les sources avec leurs URLs individuelles
     };
     setScene(scene);
-  }, [sources, name, audioUrl, setScene, savedScene?.id]);
+  }, [sources, name, setScene, savedScene?.id]);
 
   function addSourceAt(azimuthDeg: number, elevationDeg: number) {
     const id = `s${Date.now().toString(36)}`;
-    const s: AudioSource = { id, name: id, url: audioUrl, azimuthDeg, elevationDeg, gain: 1 };
+    // Utiliser l'URL de la source sélectionnée comme valeur par défaut, ou l'URL par défaut
+    const defaultUrl = sources.find(s => s.id === selectedId)?.url ?? defaultAudioUrl;
+    const s: AudioSource = { id, name: id, url: defaultUrl, azimuthDeg, elevationDeg, gain: 1 };
     setSources((prev) => [...prev, s]);
     setSelectedId(id);
   }
@@ -60,7 +61,7 @@ export default function AdminComposer() {
       id: savedScene?.id ?? `scene-${Date.now()}`,
       name,
       global: { beamWidthDeg: 60, normalize: true },
-      sources: sources.map((s) => ({ ...s, url: audioUrl })),
+      sources: sources, // Utiliser directement les sources avec leurs URLs individuelles
     };
     const blob = new Blob([JSON.stringify(scene, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -79,7 +80,6 @@ export default function AdminComposer() {
       try {
         const json = JSON.parse(String(reader.result));
         if (!json.sources) throw new Error('Fichier invalide');
-        setAudioUrl(json.sources[0]?.url ?? audioUrl);
         setName(json.name ?? name);
         setSources(json.sources);
         setSelectedId(json.sources[0]?.id ?? null);
@@ -144,13 +144,6 @@ export default function AdminComposer() {
           placeholder="Nom de la scène"
           value={name}
           onChange={(e) => setName(e.target.value)}
-        />
-        <input
-className="panel"
-          style={{ width: 350, flex: 1 }}
-          placeholder="URL audio"
-          value={audioUrl}
-          onChange={(e) => setAudioUrl(e.target.value)}
         />
         <input type="file" accept="application/json" onChange={onImportFile} style={{ cursor: 'pointer' }} />
         <button className="button" onClick={onExport}>
@@ -275,56 +268,70 @@ className="panel"
             borderRadius: '12px',
             border: '1px solid rgba(255,255,255,0.1)',
             backdropFilter: 'blur(10px)',
-            minWidth: '500px',
+            minWidth: '600px',
+            maxWidth: '800px',
           }}
         >
-          <div style={{ display: 'flex', gap: 15, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ minWidth: 150, fontWeight: 'bold', color: '#f59e0b' }}>
-              {selected.name ?? selected.id}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
+            <div style={{ display: 'flex', gap: 15, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ minWidth: 150, fontWeight: 'bold', color: '#f59e0b' }}>
+                {selected.name ?? selected.id}
+              </div>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '12px' }}>
+                Azimuth: {selected.azimuthDeg.toFixed(1)}°
+                <input
+                  type="range"
+                  min={-180}
+                  max={180}
+                  value={selected.azimuthDeg}
+                  onChange={(e) => updateSelected({ azimuthDeg: Number(e.target.value) })}
+                  style={{ width: 120 }}
+                />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '12px' }}>
+                Élévation: {selected.elevationDeg.toFixed(1)}°
+                <input
+                  type="range"
+                  min={-90}
+                  max={90}
+                  value={selected.elevationDeg}
+                  onChange={(e) => updateSelected({ elevationDeg: Number(e.target.value) })}
+                  style={{ width: 120 }}
+                />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '12px' }}>
+                Gain: {(selected.gain ?? 1).toFixed(2)}
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={selected.gain ?? 1}
+                  onChange={(e) => updateSelected({ gain: Number(e.target.value) })}
+                  style={{ width: 100 }}
+                />
+              </label>
+              <button
+                className="button button-danger"
+                onClick={() => {
+                  setSources((prev) => prev.filter((x) => x.id !== selected.id));
+                  setSelectedId(null);
+                }}
+              >
+                Supprimer
+              </button>
             </div>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '12px' }}>
-              Azimuth: {selected.azimuthDeg.toFixed(1)}°
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '12px', width: '100%' }}>
+              URL audio:
               <input
-                type="range"
-                min={-180}
-                max={180}
-                value={selected.azimuthDeg}
-                onChange={(e) => updateSelected({ azimuthDeg: Number(e.target.value) })}
-                style={{ width: 120 }}
+                className="panel"
+                type="text"
+                placeholder="https://..."
+                value={selected.url ?? ''}
+                onChange={(e) => updateSelected({ url: e.target.value })}
+                style={{ width: '100%', padding: '8px', fontSize: '12px' }}
               />
             </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '12px' }}>
-              Élévation: {selected.elevationDeg.toFixed(1)}°
-              <input
-                type="range"
-                min={-90}
-                max={90}
-                value={selected.elevationDeg}
-                onChange={(e) => updateSelected({ elevationDeg: Number(e.target.value) })}
-                style={{ width: 120 }}
-              />
-            </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '12px' }}>
-              Gain: {(selected.gain ?? 1).toFixed(2)}
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={selected.gain ?? 1}
-                onChange={(e) => updateSelected({ gain: Number(e.target.value) })}
-                style={{ width: 100 }}
-              />
-            </label>
-            <button
-              className="button button-danger"
-              onClick={() => {
-                setSources((prev) => prev.filter((x) => x.id !== selected.id));
-                setSelectedId(null);
-              }}
-            >
-              Supprimer
-            </button>
           </div>
         </div>
       )}

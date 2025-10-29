@@ -115,4 +115,20 @@ export class AudioEngine {
       node.gain.gain.setTargetAtTime(g, this.audioContext!.currentTime, 0.02);
     });
   }
+
+  /**
+   * Boost le gain d'une source spécifique (utile quand elle est touchée par le laser)
+   */
+  boostSource(sourceId: string, boostFactor: number = 2.0, maxGain: number = 1.0) {
+    if (!this.audioContext) return;
+    const node = this.nodesById.get(sourceId);
+    if (!node) return;
+    
+    // Récupérer le gain de base de la source depuis la scène (nécessiterait de passer la scène en paramètre)
+    // Pour l'instant, on utilise le gain actuel et on le multiplie
+    const currentGain = node.gain.gain.value;
+    const boostedGain = Math.min(currentGain * boostFactor, maxGain);
+    
+    node.gain.gain.setTargetAtTime(boostedGain, this.audioContext.currentTime, 0.05);
+  }
 }
