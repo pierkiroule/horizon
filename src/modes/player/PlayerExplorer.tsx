@@ -32,18 +32,12 @@ export default function PlayerExplorer() {
     const forward = new THREE.Vector3();
     camera.getWorldDirection(forward);
     
-    // Si une source est touchée, augmenter temporairement son gain
-    if (hitSourceId && scene.sources) {
-      engineRef.current.updateMix(forward, scene, { beamWidthDeg, normalize, masterGain });
-      
-      // Temporairement augmenter le gain de la source touchée
-      const hitSource = scene.sources.find((s) => s.id === hitSourceId);
-      if (hitSource) {
-        // Cette logique sera gérée dans updateMix mais on peut aussi le faire ici
-        // pour un effet plus prononcé
-      }
-    } else {
-      engineRef.current.updateMix(forward, scene, { beamWidthDeg, normalize, masterGain });
+    // Calculer le mix normal
+    engineRef.current.updateMix(forward, scene, { beamWidthDeg, normalize, masterGain });
+    
+    // Si une source est touchée, augmenter temporairement son gain (boost)
+    if (hitSourceId && engineRef.current.isPlaying) {
+      engineRef.current.boostSource(hitSourceId, 2.0, 1.0);
     }
   });
 
@@ -160,13 +154,15 @@ function SceneContent({ scene }: { scene?: Scene3D }) {
   if (!scene) return (
     <Html center>
       <div className="panel" style={{ textAlign: 'center', padding: '20px' }}>
-        <p>Aucune scène chargée</p>
+        <p>Aucun paysage sonore chargé</p>
         <p style={{ fontSize: '14px', marginTop: '10px', color: '#9ca3af' }}>
-          Créez une scène dans l'éditeur Admin pour commencer
+          Créez votre paysage de samples dans l'éditeur Admin pour commencer à naviguer
         </p>
       </div>
     </Html>
   );
+
+  const hasSources = scene.sources && Array.isArray(scene.sources) && scene.sources.length > 0;
 
   return (
     <group>
@@ -179,25 +175,39 @@ function SceneContent({ scene }: { scene?: Scene3D }) {
       {/* Plan d'horizon */}
       <gridHelper args={[10, 20, '#2a3340', '#1a222c']} />
       
+      {/* Message si pas de sources */}
+      {!hasSources && (
+        <Html center>
+          <div className="panel" style={{ textAlign: 'center', padding: '20px' }}>
+            <p>Scène "{scene.name}" chargée</p>
+            <p style={{ fontSize: '14px', marginTop: '10px', color: '#9ca3af' }}>
+              Aucune source audio dans cette scène
+            </p>
+          </div>
+        </Html>
+      )}
+      
       {/* Bulles sources audio */}
-      <group>
-        {scene.sources.map((s) => {
-          const dir = sphericalToDirection(s.azimuthDeg, s.elevationDeg);
-          const pos = dir.clone().multiplyScalar(2.5);
-          return (
-            <mesh key={s.id} position={pos.toArray()}>
-              <sphereGeometry args={[0.1, 24, 24]} />
-              <meshStandardMaterial
-                color="#89cff0"
-                emissive="#0b7fcf"
-                emissiveIntensity={0.4}
-                metalness={0.3}
-                roughness={0.2}
-              />
-            </mesh>
-          );
-        })}
-      </group>
+      {hasSources && (
+        <group>
+          {scene.sources.map((s) => {
+            const dir = sphericalToDirection(s.azimuthDeg, s.elevationDeg);
+            const pos = dir.clone().multiplyScalar(2.5);
+            return (
+              <mesh key={s.id} position={pos.toArray()}>
+                <sphereGeometry args={[0.1, 24, 24]} />
+                <meshStandardMaterial
+                  color="#89cff0"
+                  emissive="#0b7fcf"
+                  emissiveIntensity={0.4}
+                  metalness={0.3}
+                  roughness={0.2}
+                />
+              </mesh>
+            );
+          })}
+        </group>
+      )}
     </group>
   );
 }
