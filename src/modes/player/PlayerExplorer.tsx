@@ -1,38 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { useFrame, useThree } from '@react-three/fiber';
 import { DeviceOrientationControls, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { CanvasLayout } from '../../components/CanvasLayout';
 import { GlobalControls } from '../../components/GlobalControls';
-import { loadSceneFromUrl } from '../../lib/loaders';
 import { sphericalToDirection } from '../../lib/orientation';
 import type { Scene3D } from '../../lib/types';
 import { AudioEngine } from '../../audio/AudioEngine';
 import { useAppStore } from '../../state/useAppStore';
+import { LaserRay } from '../../components/player/LaserRay';
+import { LaserHitDetector } from '../../components/player/LaserHitDetector';
 
 export default function PlayerExplorer() {
-  const [search] = useSearchParams();
-  const defaultUrl = '/scenes/demo.json';
-  const url = search.get('scene') || defaultUrl;
-  const [scene, setScene] = useState<Scene3D | undefined>();
+  // Utiliser la scène du store au lieu de charger depuis un fichier
+  const scene = useAppStore((s) => s.scene);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | undefined>();
   const engineRef = useRef<AudioEngine>();
   const [useSensors, setUseSensors] = useState(false);
+  const [hitSourceId, setHitSourceId] = useState<string | null>(null);
 
   const masterGain = useAppStore((s) => s.masterGain);
   const beamWidthDeg = useAppStore((s) => s.beamWidthDeg);
   const normalize = useAppStore((s) => s.normalize);
-
-  useEffect(() => {
-    setLoading(true);
-    setError(undefined);
-    loadSceneFromUrl(url)
-      .then((s) => setScene(s))
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
-  }, [url]);
 
   useEffect(() => {
     if (engineRef.current) engineRef.current.setMasterGain(masterGain);
@@ -43,11 +32,27 @@ export default function PlayerExplorer() {
     if (!engineRef.current || !scene) return;
     const forward = new THREE.Vector3();
     camera.getWorldDirection(forward);
-    engineRef.current.updateMix(forward, scene, { beamWidthDeg, normalize, masterGain });
+    
+    // Si une source est touchée, augmenter temporairement son gain
+    if (hitSourceId && scene.sources) {
+      engineRef.current.updateMix(forward, scene, { beamWidthDeg, normalize, masterGain });
+      
+      // Temporairement augmenter le gain de la source touchée
+      const hitSource = scene.sources.find((s) => s.id === hitSourceId);
+      if (hitSource) {
+        // Cette logique sera gérée dans updateMix mais on peut aussi le faire ici
+        // pour un effet plus prononcé
+      }
+    } else {
+      engineRef.current.updateMix(forward, scene, { beamWidthDeg, normalize, masterGain });
+    }
   });
 
   async function onPlay() {
-    if (!scene) return;
+    if (!scene) {
+      alert('Aucune scène disponible. Créez d\'abord une scène dans l\'éditeur Admin.');
+      return;
+    }
     if (!engineRef.current) engineRef.current = new AudioEngine();
     try {
       await engineRef.current.start(scene);
@@ -81,10 +86,18 @@ export default function PlayerExplorer() {
     }
   }
 
+  function handleHit(source: { id: string }) {
+    setHitSourceId(source.id);
+    // Réinitialiser après un court délai
+    setTimeout(() => {
+      setHitSourceId(null);
+    }, 500);
+  }
+
   return (
     <div style={{ height: '100%', width: '100%' }}>
       <TopBar
-        url={url}
+        sceneName={scene?.name ?? 'Aucune scène'}
         onPlay={onPlay}
         onStop={onStop}
         isPlaying={!!engineRef.current?.isPlaying}
@@ -94,14 +107,35 @@ export default function PlayerExplorer() {
       <CanvasLayout>
         <GlobalControls />
         {useSensors && <DeviceOrientationControls makeDefault />}
-        <SceneContent scene={scene} loading={loading} error={error} />
+        
+        {/* Rayon laser visible (utilise le gyroscope via DeviceOrientationControls) */}
+        {useSensors && <LaserRay length={5} color="#ff0000" visible={true} />}
+        
+        {/* Détection de collision et affichage du texte "touché" */}
+        {scene && useSensors && (
+          <LaserHitDetector
+            scene={scene}
+            radius={2.5}
+            audioEngine={engineRef.current}
+            onHit={handleHit}
+          />
+        )}
+        
+        <SceneContent scene={scene} loading={loading} />
       </CanvasLayout>
     </div>
   );
 }
 
-function TopBar({ url, onPlay, onStop, isPlaying, onEnableSensors, sensorsEnabled }: {
-  url: string;
+function TopBar({
+  sceneName,
+  onPlay,
+  onStop,
+  isPlaying,
+  onEnableSensors,
+  sensorsEnabled,
+}: {
+  sceneName: string;
   onPlay: () => void;
   onStop: () => void;
   isPlaying: boolean;
@@ -110,8 +144,10 @@ function TopBar({ url, onPlay, onStop, isPlaying, onEnableSensors, sensorsEnable
 }) {
   return (
     <div style={{ position: 'fixed', top: 10, right: 10, zIndex: 1001, display: 'flex', gap: 8, alignItems: 'center' }}>
-      <span className="panel">Scène: {url}</span>
-      <button className="button" onClick={onEnableSensors}>{sensorsEnabled ? 'Capteurs actifs' : 'Activer capteurs'}</button>
+      <span className="panel">Scène: {sceneName}</span>
+      <button className="button" onClick={onEnableSensors}>
+        {sensorsEnabled ? 'Gyroscope actif' : 'Activer gyroscope'}
+      </button>
       {!isPlaying ? (
         <button className="button" onClick={onPlay}>Lecture</button>
       ) : (
@@ -121,28 +157,47 @@ function TopBar({ url, onPlay, onStop, isPlaying, onEnableSensors, sensorsEnable
   );
 }
 
-function SceneContent({ scene, loading, error }: { scene?: Scene3D; loading: boolean; error?: string }) {
+function SceneContent({ scene, loading }: { scene?: Scene3D; loading: boolean }) {
   if (loading) return (
     <Html center><div className="panel">Chargement de la scène…</div></Html>
   );
-  if (error) return (
-    <Html center><div className="panel">Erreur: {error}</div></Html>
-  );
   if (!scene) return (
-    <Html center><div className="panel">Aucune scène chargée</div></Html>
+    <Html center>
+      <div className="panel" style={{ textAlign: 'center', padding: '20px' }}>
+        <p>Aucune scène chargée</p>
+        <p style={{ fontSize: '14px', marginTop: '10px', color: '#9ca3af' }}>
+          Créez une scène dans l'éditeur Admin pour commencer
+        </p>
+      </div>
+    </Html>
   );
 
   return (
     <group>
+      {/* Sphère de référence */}
+      <mesh>
+        <sphereGeometry args={[2.5, 32, 32]} />
+        <meshBasicMaterial color="#1c2430" wireframe transparent opacity={0.3} />
+      </mesh>
+      
+      {/* Plan d'horizon */}
       <gridHelper args={[10, 20, '#2a3340', '#1a222c']} />
+      
+      {/* Bulles sources audio */}
       <group>
         {scene.sources.map((s) => {
           const dir = sphericalToDirection(s.azimuthDeg, s.elevationDeg);
-          const pos = dir.clone().multiplyScalar(3);
+          const pos = dir.clone().multiplyScalar(2.5);
           return (
             <mesh key={s.id} position={pos.toArray()}>
-              <sphereGeometry args={[0.06, 16, 16]} />
-              <meshStandardMaterial color="#89cff0" emissive="#0b7fcf" emissiveIntensity={0.2} />
+              <sphereGeometry args={[0.1, 24, 24]} />
+              <meshStandardMaterial
+                color="#89cff0"
+                emissive="#0b7fcf"
+                emissiveIntensity={0.4}
+                metalness={0.3}
+                roughness={0.2}
+              />
             </mesh>
           );
         })}
