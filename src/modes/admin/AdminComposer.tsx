@@ -39,6 +39,7 @@ export default function AdminComposer() {
   const [magneticGrid, setMagneticGrid] = useState<boolean>(true);
   const [gridSize, setGridSize] = useState<number>(15);
   const [contextMenu, setContextMenu] = useState<null | { x: number; y: number; sourceId: string }>(null);
+  const [showSourcesWindow, setShowSourcesWindow] = useState<boolean>(true);
 
   // Sauvegarder automatiquement la scène dans le store quand elle change
   useEffect(() => {
@@ -179,6 +180,9 @@ export default function AdminComposer() {
         >
           {viewLayout === 'single' ? 'Vues multiples' : 'Vue unique'}
         </button>
+        <button className="button" onClick={() => setShowSourcesWindow((v) => !v)}>
+          {showSourcesWindow ? 'Masquer sources' : 'Afficher sources'}
+        </button>
         <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <input
             type="checkbox"
@@ -202,6 +206,92 @@ export default function AdminComposer() {
           </label>
         )}
       </div>
+
+      {/* Fenêtre flottante: liste des bulles (sources) */}
+      {showSourcesWindow && (
+        <div
+          className="panel"
+          style={{
+            position: 'fixed',
+            top: 90,
+            right: 10,
+            zIndex: 1001,
+            width: 320,
+            maxHeight: '60vh',
+            overflow: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <div style={{ fontWeight: 700, color: '#f59e0b' }}>Sources</div>
+            <button className="button" onClick={() => setShowSourcesWindow(false)}>Fermer</button>
+          </div>
+          {sources.length === 0 && (
+            <div style={{ fontSize: 12, color: '#9ca3af' }}>Aucune source. Cliquez sur la sphère pour ajouter.</div>
+          )}
+          {sources.map((s) => (
+            <div
+              key={s.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 8,
+                padding: '6px 8px',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 8,
+                background: 'rgba(15, 23, 42, 0.4)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                <span
+                  aria-hidden
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: 999,
+                    background: s.color ?? '#f59e0b',
+                    flex: '0 0 auto',
+                  }}
+                />
+                <div style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  maxWidth: 150,
+                  color: '#e5e7eb'
+                }}>
+                  {s.name ?? s.id}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flex: '0 0 auto' }}>
+                <button
+                  className="button"
+                  onClick={() => {
+                    setSelectedId(s.id);
+                  }}
+                  title="Éditer"
+                >
+                  Éditer
+                </button>
+                <button
+                  className="button button-danger"
+                  onClick={() => {
+                    setSources((prev) => prev.filter((x) => x.id !== s.id));
+                    if (selectedId === s.id) setSelectedId(null);
+                  }}
+                  title="Supprimer"
+                >
+                  Supprimer
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Zone d'édition principale */}
       <div style={{ flex: 1, marginTop:'80px', padding: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
