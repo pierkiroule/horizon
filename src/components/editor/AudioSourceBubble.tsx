@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import * as THREE from 'three';
 import { sphericalToDirection } from '../../lib/orientation';
 import type { AudioSource } from '../../lib/types';
@@ -24,8 +24,6 @@ export function AudioSourceBubble({
   onContextMenu,
 }: AudioSourceBubbleProps) {
   const [hovered, setHovered] = useState(false);
-  const longPressTimerRef = useRef<number | null>(null);
-  const lastPointerDownRef = useRef<{ x: number; y: number } | null>(null);
   const dir = sphericalToDirection(source.azimuthDeg, source.elevationDeg);
   const pos = dir.clone().multiplyScalar(radius);
 
@@ -46,48 +44,10 @@ export function AudioSourceBubble({
       onPointerDown={(e) => {
         e.stopPropagation();
         onDragStart?.(source);
-        // Long-press (touch) to open context menu on mobile
-        const anyEvent = e as any;
-        if (anyEvent.pointerType === 'touch') {
-          try { anyEvent.preventDefault?.(); } catch {}
-          const clientX = anyEvent.clientX ?? 0;
-          const clientY = anyEvent.clientY ?? 0;
-          lastPointerDownRef.current = { x: clientX, y: clientY };
-          if (longPressTimerRef.current) {
-            window.clearTimeout(longPressTimerRef.current);
-          }
-          longPressTimerRef.current = window.setTimeout(() => {
-            onContextMenu?.(source, { x: clientX, y: clientY });
-            longPressTimerRef.current = null;
-          }, 500);
-        }
       }}
       onPointerUp={(e) => {
         e.stopPropagation();
         onDragEnd?.(source);
-        // Cancel long-press if released
-        if (longPressTimerRef.current) {
-          window.clearTimeout(longPressTimerRef.current);
-          longPressTimerRef.current = null;
-        }
-      }}
-      onPointerCancel={() => {
-        if (longPressTimerRef.current) {
-          window.clearTimeout(longPressTimerRef.current);
-          longPressTimerRef.current = null;
-        }
-      }}
-      onPointerMove={(e) => {
-        // If finger moves too much, cancel long-press
-        if (longPressTimerRef.current && lastPointerDownRef.current) {
-          const anyEvent = e as any;
-          const dx = (anyEvent.clientX ?? 0) - lastPointerDownRef.current.x;
-          const dy = (anyEvent.clientY ?? 0) - lastPointerDownRef.current.y;
-          if (dx * dx + dy * dy > 25) {
-            window.clearTimeout(longPressTimerRef.current);
-            longPressTimerRef.current = null;
-          }
-        }
       }}
       onContextMenu={(e) => {
         e.stopPropagation();
