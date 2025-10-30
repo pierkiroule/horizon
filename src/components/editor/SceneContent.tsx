@@ -16,6 +16,7 @@ interface SceneContentProps {
   onSourceClick?: (source: AudioSource) => void;
   onSourceDragStart?: (source: AudioSource) => void;
   onSourceDragEnd?: (source: AudioSource) => void;
+  onSourceContextMenu?: (source: AudioSource, screen: { x: number; y: number }) => void;
 }
 
 export function SceneContent({
@@ -30,6 +31,7 @@ export function SceneContent({
   onSourceClick,
   onSourceDragStart,
   onSourceDragEnd,
+  onSourceContextMenu,
 }: SceneContentProps) {
   return (
     <>
@@ -57,6 +59,7 @@ export function SceneContent({
           onClick={onSourceClick}
           onDragStart={onSourceDragStart}
           onDragEnd={onSourceDragEnd}
+          onContextMenu={onSourceContextMenu}
         />
       ))}
     </>

@@ -16,18 +16,29 @@ export default function AdminComposer() {
   
   const defaultAudioUrl = 'https://cdn.pixabay.com/download/audio/2022/03/01/audio_400fae9dcc.mp3?filename=relaxing-piano-ambient-112199.mp3';
   const [name, setName] = useState<string>(savedScene?.name ?? 'Démo');
-  const [sources, setSources] = useState<AudioSource[]>(savedScene?.sources && savedScene.sources.length > 0 ? savedScene.sources : [...Array(8)].map((_, i) => ({
-    id: `s${i + 1}`,
-    name: `S${i + 1}`,
-    url: defaultAudioUrl,
-    azimuthDeg: (i * 360) / 8 - 180,
-    elevationDeg: 0,
-    gain: 1,
-  })));
+  // Palette de couleurs pour les bulles
+  const palette = ['#f59e0b','#10b981','#3b82f6','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f472b6','#fb923c','#22c55e','#60a5fa','#eab308'];
+  const [nextColorIndex, setNextColorIndex] = useState<number>(1);
+  const initialSources: AudioSource[] = savedScene?.sources && savedScene.sources.length > 0
+    ? savedScene.sources
+    : [{
+        id: 's1',
+        name: 'S1',
+        url: defaultAudioUrl,
+        azimuthDeg: 0,
+        elevationDeg: 0,
+        gain: 1,
+        color: '#f59e0b',
+        loop: true,
+        fadeInSec: 0,
+        fadeOutSec: 0,
+      }];
+  const [sources, setSources] = useState<AudioSource[]>(initialSources);
   const [selectedId, setSelectedId] = useState<string | null>(sources.length > 0 ? (sources[0]?.id ?? null) : null);
   const [viewLayout, setViewLayout] = useState<ViewLayout>('grid');
   const [magneticGrid, setMagneticGrid] = useState<boolean>(true);
   const [gridSize, setGridSize] = useState<number>(15);
+  const [contextMenu, setContextMenu] = useState<null | { x: number; y: number; sourceId: string }>(null);
 
   // Sauvegarder automatiquement la scène dans le store quand elle change
   useEffect(() => {
@@ -44,7 +55,9 @@ export default function AdminComposer() {
     const id = `s${Date.now().toString(36)}`;
     // Utiliser l'URL de la source sélectionnée comme valeur par défaut, ou l'URL par défaut
     const defaultUrl = sources.find(s => s.id === selectedId)?.url ?? defaultAudioUrl;
-    const s: AudioSource = { id, name: id, url: defaultUrl, azimuthDeg, elevationDeg, gain: 1 };
+    const color = palette[nextColorIndex % palette.length];
+    setNextColorIndex((i) => (i + 1) % palette.length);
+    const s: AudioSource = { id, name: id, url: defaultUrl, azimuthDeg, elevationDeg, gain: 1, color, loop: true, fadeInSec: 0, fadeOutSec: 0 };
     setSources((prev) => [...prev, s]);
     setSelectedId(id);
   }
@@ -104,6 +117,11 @@ export default function AdminComposer() {
     // TODO: Implement drag functionality
   }
 
+  function onSourceContextMenu(source: AudioSource, screen: { x: number; y: number }) {
+    setSelectedId(source.id);
+    setContextMenu({ x: screen.x, y: screen.y, sourceId: source.id });
+  }
+
   const selected = useMemo(() => sources.find((s) => s.id === selectedId), [sources, selectedId]);
 
   const commonSceneProps = {
@@ -118,6 +136,7 @@ export default function AdminComposer() {
     onSourceClick,
     onSourceDragStart,
     onSourceDragEnd,
+    onSourceContextMenu,
   };
 
   return (
@@ -338,6 +357,73 @@ export default function AdminComposer() {
               />
             </label>
           </div>
+        </div>
+      )}
+
+      {/* Menu contextuel source */}
+      {contextMenu && (
+        <div
+          style={{
+            position: 'fixed',
+            top: contextMenu.y,
+            left: contextMenu.x,
+            transform: 'translate(0, 0)',
+            zIndex: 1002,
+            background: 'rgba(17, 24, 39, 0.98)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 8,
+            padding: 12,
+            minWidth: 260,
+            color: '#e5e7eb',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.4)'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {(() => {
+            const s = sources.find(x => x.id === contextMenu.sourceId);
+            if (!s) return null;
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ fontWeight: 700, color: s.color ?? '#f59e0b' }}>Configurer « {s.name ?? s.id} »</div>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
+                  Titre
+                  <input className="panel" value={s.name ?? ''} onChange={(e) => updateSelected({ name: e.target.value })} />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
+                  URL audio
+                  <input className="panel" placeholder="https://..." value={s.url} onChange={(e) => updateSelected({ url: e.target.value })} />
+                </label>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
+                    Volume: {(s.gain ?? 1).toFixed(2)}
+                    <input type="range" min={0} max={1} step={0.01} value={s.gain ?? 1} onChange={(e) => updateSelected({ gain: Number(e.target.value) })} />
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                    <input type="checkbox" checked={s.loop ?? true} onChange={(e) => updateSelected({ loop: e.target.checked })} />
+                    Loop
+                  </label>
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
+                    Fade in (s)
+                    <input type="number" min={0} max={30} step={0.1} value={s.fadeInSec ?? 0} onChange={(e) => updateSelected({ fadeInSec: Number(e.target.value) })} />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
+                    Fade out (s)
+                    <input type="number" min={0} max={30} step={0.1} value={s.fadeOutSec ?? 0} onChange={(e) => updateSelected({ fadeOutSec: Number(e.target.value) })} />
+                  </label>
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                  Couleur
+                  <input type="color" value={s.color ?? '#f59e0b'} onChange={(e) => updateSelected({ color: e.target.value })} />
+                </label>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
+                  <button className="button button-danger" onClick={() => { setSources(prev => prev.filter(x => x.id !== s.id)); setContextMenu(null); }}>Supprimer</button>
+                  <button className="button" onClick={() => setContextMenu(null)}>Fermer</button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
