@@ -8,6 +8,7 @@ import { GlobalControls } from '../../components/GlobalControls';
 import { sphericalToDirection } from '../../lib/orientation';
 import type { Scene3D } from '../../lib/types';
 import { AudioEngine } from '../../audio/AudioEngine';
+import { CompassEngine } from '../../audio/CompassEngine';
 import { useAppStore } from '../../state/useAppStore';
 import { LaserRay } from '../../components/player/LaserRay';
 import { LaserHitDetector } from '../../components/player/LaserHitDetector';
@@ -17,7 +18,9 @@ export default function PlayerExplorer() {
   // Utiliser la scène du store au lieu de charger depuis un fichier
   const scene = useAppStore((s) => s.scene);
   const engineRef = useRef<AudioEngine>();
+  const compassRef = useRef<CompassEngine | null>(null);
   const [useSensors, setUseSensors] = useState(false);
+  const [compassMode, setCompassMode] = useState(false);
   const [hitSourceId, setHitSourceId] = useState<string | null>(null);
 
   const masterGain = useAppStore((s) => s.masterGain);
@@ -31,6 +34,10 @@ export default function PlayerExplorer() {
   async function onPlay() {
     if (!scene) {
       alert('Aucune scène disponible. Créez d\'abord une scène dans l\'éditeur Admin.');
+      return;
+    }
+    if (compassMode) {
+      alert('Le mode boussole joue automatiquement — désactivez-le pour utiliser Lecture.');
       return;
     }
     // L'AudioContext devrait déjà être créé et activé par enableSensors
@@ -56,6 +63,7 @@ export default function PlayerExplorer() {
 
   async function onStop() {
     await engineRef.current?.stop();
+    compassRef.current?.stop();
   }
 
   async function enableSensors() {
@@ -87,6 +95,66 @@ export default function PlayerExplorer() {
     }
   }
 
+  // Mappe la scène actuelle vers 8 secteurs (N, NE, E, SE, S, SW, W, NW)
+  function buildSectorSourcesFromScene(current?: Scene3D) {
+    if (!current || !current.sources || current.sources.length === 0) return null;
+    const sectorCenters = [0, 45, 90, 135, 180, -135, -90, -45];
+    function angDist(a: number, b: number) {
+      let d = Math.abs(a - b) % 360;
+      return d > 180 ? 360 - d : d;
+    }
+    const picked = sectorCenters.map((center) => {
+      let best = current.sources[0];
+      let bestD = Infinity;
+      for (const s of current.sources) {
+        const d = angDist(s.azimuthDeg, center);
+        if (d < bestD) {
+          bestD = d;
+          best = s;
+        }
+      }
+      return { url: best.url, gain: best.gain ?? 1, mode: (best.loop ?? true) ? 'loop' as const : 'oneshot' as const };
+    });
+    return picked;
+  }
+
+  // Active/désactive le mode boussole (8 secteurs)
+  async function toggleCompassMode() {
+    if (!scene) {
+      alert('Aucune scène disponible.');
+      return;
+    }
+    const next = !compassMode;
+    setCompassMode(next);
+    if (next) {
+      // Stopper le moteur de mixage classique
+      await engineRef.current?.stop();
+      // Construire les 8 sources
+      const sectorSources = buildSectorSourcesFromScene(scene);
+      if (!sectorSources) {
+        alert('La scène ne contient aucune source sonore.');
+        setCompassMode(false);
+        return;
+      }
+      // Démarrer le moteur boussole
+      compassRef.current = new CompassEngine(sectorSources, { crossfadeMs: 220, sectorHysteresisDeg: 10 });
+      try {
+        await compassRef.current.init();
+        await compassRef.current.resume();
+      } catch (e) {
+        console.error(e);
+        alert('Échec du démarrage du mode boussole: ' + String(e));
+        setCompassMode(false);
+        compassRef.current?.stop();
+        compassRef.current = null;
+      }
+    } else {
+      // Arrêter le moteur boussole
+      compassRef.current?.stop();
+      compassRef.current = null;
+    }
+  }
+
   function handleHit(source: { id: string }) {
     setHitSourceId(source.id);
     // Réinitialiser après un court délai
@@ -104,6 +172,8 @@ export default function PlayerExplorer() {
         isPlaying={!!engineRef.current?.isPlaying}
         onEnableSensors={enableSensors}
         sensorsEnabled={useSensors}
+        compassMode={compassMode}
+        onToggleCompassMode={toggleCompassMode}
       />
       <CanvasLayout>
         <GlobalControls />
@@ -116,20 +186,22 @@ export default function PlayerExplorer() {
         )}
         
         {/* Composant interne qui gère la mise à jour audio (doit être dans le Canvas) */}
-        <PlayerSceneController
-          scene={scene}
-          engineRef={engineRef}
-          hitSourceId={hitSourceId}
-          beamWidthDeg={beamWidthDeg}
-          normalize={normalize}
-          masterGain={masterGain}
-        />
+        {!compassMode && (
+          <PlayerSceneController
+            scene={scene}
+            engineRef={engineRef}
+            hitSourceId={hitSourceId}
+            beamWidthDeg={beamWidthDeg}
+            normalize={normalize}
+            masterGain={masterGain}
+          />
+        )}
         
         {/* Rayon laser visible (utilise le gyroscope via DeviceOrientationControls) */}
-        {useSensors && <LaserRay length={5} color="#ff0000" visible={true} />}
+        {useSensors && !compassMode && <LaserRay length={5} color="#ff0000" visible={true} />}
         
         {/* Détection de collision et affichage du texte "touché" */}
-        {scene && useSensors && (
+        {scene && useSensors && !compassMode && (
           <LaserHitDetector
             scene={scene}
             radius={2.5}
@@ -137,6 +209,9 @@ export default function PlayerExplorer() {
             onHit={handleHit}
           />
         )}
+
+        {/* Contrôleur de boussole */}
+        {useSensors && compassMode && <CompassController compassRef={compassRef} />}
         
         <SceneContent scene={scene} />
       </CanvasLayout>
@@ -208,6 +283,8 @@ function TopBar({
   isPlaying,
   onEnableSensors,
   sensorsEnabled,
+  compassMode,
+  onToggleCompassMode,
 }: {
   sceneName: string;
   onPlay: () => void;
@@ -215,6 +292,8 @@ function TopBar({
   isPlaying: boolean;
   onEnableSensors: () => void;
   sensorsEnabled: boolean;
+  compassMode: boolean;
+  onToggleCompassMode: () => void;
 }) {
   return (
     <div style={{ position: 'fixed', top: 10, left: 10, right: 10, zIndex: 1001, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -225,6 +304,9 @@ function TopBar({
       <button className="button" onClick={onEnableSensors}>
         {sensorsEnabled ? 'Capteurs/Son actifs' : 'Activer capteurs/son'}
       </button>
+      <button className="button" onClick={onToggleCompassMode}>
+        {compassMode ? 'Mode boussole: ON' : 'Mode boussole: OFF'}
+      </button>
       {!isPlaying ? (
         <button className="button" onClick={onPlay}>Lecture</button>
       ) : (
@@ -232,6 +314,23 @@ function TopBar({
       )}
     </div>
   );
+}
+
+// Contrôleur de boussole: convertit la direction caméra en cap (0..360) et met à jour CompassEngine
+function CompassController({ compassRef }: { compassRef: React.MutableRefObject<CompassEngine | null> }) {
+  const { camera } = useThree();
+  useFrame(() => {
+    const engine = compassRef.current;
+    if (!engine) return;
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    // headingDeg: 0=N(-Z), 90=E(+X), 180=S(+Z), 270=W(-X)
+    const headingRad = Math.atan2(forward.x, -forward.z);
+    const headingDeg = (headingRad * 180) / Math.PI;
+    const heading360 = (headingDeg + 360) % 360;
+    engine.updateHeading(heading360);
+  });
+  return null;
 }
 
 function SceneContent({ scene }: { scene?: Scene3D }) {
