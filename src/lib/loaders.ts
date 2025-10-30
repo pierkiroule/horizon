@@ -8,6 +8,10 @@ const AudioSourceSchema = z.object({
   azimuthDeg: z.number().min(-180).max(180),
   elevationDeg: z.number().min(-90).max(90),
   gain: z.number().min(0).max(1).optional(),
+  color: z.string().optional(),
+  loop: z.boolean().optional(),
+  fadeInSec: z.number().min(0).max(30).optional(),
+  fadeOutSec: z.number().min(0).max(30).optional(),
 });
 
 const SceneSchema = z.object({

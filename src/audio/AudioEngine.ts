@@ -12,8 +12,9 @@ export class AudioEngine {
   private audioContext?: AudioContext;
   private master?: GainNode;
   private buffers: Map<string, AudioBuffer> = new Map();
-  private nodesById: Map<string, { source: AudioBufferSourceNode; gain: GainNode; url: string }> = new Map();
+  private nodesById: Map<string, { source: AudioBufferSourceNode; preGain: GainNode; mixGain: GainNode; url: string }> = new Map();
   private _isPlaying = false;
+  private currentScene?: Scene3D;
 
   get isPlaying() {
     return this._isPlaying;
@@ -51,12 +52,14 @@ export class AudioEngine {
   async prepareGraph(scene: Scene3D) {
     const ctx = await this.ensureContext();
     // Clean previous nodes
-    this.nodesById.forEach(({ source, gain }) => {
+    this.nodesById.forEach(({ source, preGain, mixGain }) => {
       try { source.stop(0); } catch {}
       try { source.disconnect(); } catch {}
-      try { gain.disconnect(); } catch {}
+      try { preGain.disconnect(); } catch {}
+      try { mixGain.disconnect(); } catch {}
     });
     this.nodesById.clear();
+    this.currentScene = scene;
 
     // Preload unique buffers
     const uniqueUrls = Array.from(new Set(scene.sources.map((s) => s.url)));
@@ -68,12 +71,31 @@ export class AudioEngine {
       if (!buffer) throw new Error(`Buffer manquant pour ${s.url}`);
       const src = ctx.createBufferSource();
       src.buffer = buffer;
-      src.loop = true;
-      const gain = ctx.createGain();
-      gain.gain.value = s.gain ?? 1;
-      src.connect(gain);
-      gain.connect(this.master!);
-      this.nodesById.set(s.id, { source: src, gain, url: s.url });
+      src.loop = s.loop ?? true;
+
+      // Envelope/pre gain (for fade in/out independent of mix)
+      const preGain = ctx.createGain();
+      // Start at 0 if fadeIn planned, otherwise at 1
+      const fadeIn = Math.max(0, Math.min(30, s.fadeInSec ?? 0));
+      preGain.gain.value = fadeIn > 0 ? 0 : 1;
+
+      // Mix gain controlled by directional mixer (updateMix)
+      const mixGain = ctx.createGain();
+      mixGain.gain.value = 0; // will be driven by updateMix
+
+      src.connect(preGain);
+      preGain.connect(mixGain);
+      mixGain.connect(this.master!);
+
+      // Schedule fade in
+      if (fadeIn > 0) {
+        const now = ctx.currentTime;
+        preGain.gain.cancelScheduledValues(now);
+        preGain.gain.setValueAtTime(0, now);
+        preGain.gain.linearRampToValueAtTime(1, now + fadeIn);
+      }
+
+      this.nodesById.set(s.id, { source: src, preGain, mixGain, url: s.url });
     }
   }
 
@@ -90,7 +112,23 @@ export class AudioEngine {
 
   async stop() {
     if (!this.audioContext) return;
-    this.nodesById.forEach(({ source }) => { try { source.stop(0); } catch {} });
+    const ctx = this.audioContext;
+    const scene = this.currentScene;
+
+    // Apply fade out if specified, then stop
+    this.nodesById.forEach(({ source, preGain }, id) => {
+      const conf = scene?.sources.find((s) => s.id === id);
+      const fadeOut = Math.max(0, Math.min(30, conf?.fadeOutSec ?? 0));
+      const now = ctx.currentTime;
+      try { preGain.gain.cancelScheduledValues(now); } catch {}
+      if (fadeOut > 0) {
+        try { preGain.gain.setValueAtTime(preGain.gain.value, now); } catch {}
+        try { preGain.gain.linearRampToValueAtTime(0, now + fadeOut); } catch {}
+        try { source.stop(now + fadeOut + 0.01); } catch {}
+      } else {
+        try { source.stop(0); } catch {}
+      }
+    });
     this.nodesById.clear();
     this._isPlaying = false;
   }
@@ -111,8 +149,8 @@ export class AudioEngine {
     scene.sources.forEach((s, idx) => {
       const node = this.nodesById.get(s.id);
       if (!node) return;
-      const g = weights[idx] * scale * masterGain;
-      node.gain.gain.setTargetAtTime(g, this.audioContext!.currentTime, 0.02);
+      const g = weights[idx] * scale * masterGain * (s.gain ?? 1);
+      node.mixGain.gain.setTargetAtTime(g, this.audioContext!.currentTime, 0.02);
     });
   }
 
@@ -126,9 +164,9 @@ export class AudioEngine {
     
     // Récupérer le gain de base de la source depuis la scène (nécessiterait de passer la scène en paramètre)
     // Pour l'instant, on utilise le gain actuel et on le multiplie
-    const currentGain = node.gain.gain.value;
+    const currentGain = node.mixGain.gain.value;
     const boostedGain = Math.min(currentGain * boostFactor, maxGain);
     
-    node.gain.gain.setTargetAtTime(boostedGain, this.audioContext.currentTime, 0.05);
+    node.mixGain.gain.setTargetAtTime(boostedGain, this.audioContext.currentTime, 0.05);
   }
 }
